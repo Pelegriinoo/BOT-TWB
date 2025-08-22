@@ -25,7 +25,7 @@ window.TWBConfig = {
         zIndex: 999999,
         autoShow: false,
         enableKeyboardShortcut: true,
-        keyboardShortcut: 'Ctrl+Shift+T'
+        keyboardShortcut: 'Ctrl+Esc'
     },
     
     // Configurações de comportamento
