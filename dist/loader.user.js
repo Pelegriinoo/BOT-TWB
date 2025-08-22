@@ -25,7 +25,7 @@
     
     // Configuração do loader
     const LOADER_CONFIG = {
-        baseUrl: 'https://Pelegriinoo.github.io/BOT-TWB/modules/',
+        baseUrl: 'https://Pelegriinoo.github.io/BOT-TWB/dist/modules/',
         version: '2.0.0',
         timeout: 15000, // 15 segundos
         retries: 3
