@@ -1,18 +1,19 @@
 {
-  "name": "BOT-TWB",
-  "version": "2.1.0",
-  "description": "Sistema modular para Tribal Wars",
-  "author": "Pelegriinoo",
-  "buildDate": "2025-08-22T15:16:58.627Z",
+  "version": "2.0.0",
   "modules": [
-    "core/constants.min.js",
-    "core/api.min.js",
-    "core/auth.min.js",
-    "core/troops.min.js",
-    "interface/components.min.js",
-    "interface/main.min.js",
-    "modules/attack-system.min.js",
-    "modules/troop-counter.min.js",
-    "system/init.min.js"
-  ]
+    "constants.js",
+    "api.js",
+    "auth.js",
+    "troops.js",
+    "utils.js",
+    "attack-system.js",
+    "troop-counter.js",
+    "village-manager.js",
+    "ui-components.js",
+    "main-interface.js",
+    "system.js"
+  ],
+  "baseUrl": "https://Pelegriinoo.github.io/BOT-TWB/dist/modules/",
+  "description": "BOT-TWB Modular System - Tribal Wars Bot",
+  "lastUpdated": "2025-08-22T15:47:27.354Z"
 }
