@@ -22,12 +22,6 @@
     'use strict';
     
     console.log('🏰 BOT-TWB v2.0.0 - Iniciado');
-    
-    // Teste rápido de disponibilidade
-    console.log('📋 Verificando dependências...');
-    console.log('- TROOP_CONFIG:', typeof window.TROOP_CONFIG);
-    console.log('- UIComponents:', typeof window.UIComponents);
-    console.log('- TribalWarsAPI:', typeof window.TribalWarsAPI);
 
 // === config/constants.js ===
 /**
@@ -969,7 +963,7 @@ window.TroopsManager = class TroopsManager {
      */
     extractTroopsFromHTML(html) {
         const troops = {};
-        const unitTypes = Object.keys(window.TROOP_CONFIG);
+        const unitTypes = Object.keys(TROOP_CONFIG);
 
         // Inicializar todas as tropas com 0
         unitTypes.forEach(unit => {
@@ -1017,7 +1011,7 @@ window.TroopsManager = class TroopsManager {
 
         Object.entries(troops).forEach(([unit, count]) => {
             // Verificar se unidade existe
-            if (!window.TROOP_CONFIG[unit]) {
+            if (!TROOP_CONFIG[unit]) {
                 errors.push(`Unidade desconhecida: ${unit}`);
                 return;
             }

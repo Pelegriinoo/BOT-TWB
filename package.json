@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build.js",
     "build:modular": "node build-modular.js",
-    "build:all": "npm run build && npm run build:modular"
+    "build:modules": "node build-modules.js",
+    "build:all": "npm run build && npm run build:modular && npm run build:modules"
   },
   "author": "Pelegriinoo",
   "license": "MIT"
