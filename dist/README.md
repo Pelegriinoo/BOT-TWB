@@ -3,7 +3,7 @@
 ## Arquivos Gerados
 
 - **bot-twb.user.js**: UserScript completo com todos os módulos
-- **Tamanho**: 79 KB
+- **Tamanho**: 85 KB
 
 ## Módulos Incluídos
 
@@ -48,4 +48,4 @@ TWB.getStatus();
 ```
 
 ---
-Gerado automaticamente em 22/08/2025, 12:02:39
+Gerado automaticamente em 22/08/2025, 12:09:21

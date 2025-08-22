@@ -13,7 +13,7 @@ export class TWBInterface {
         this.auth = authManager;
         this.troops = troopsManager;
         this.attack = attackSystem;
-        this.ui = new UIComponents();
+        this.ui = new window.UIComponents();
         
         this.isVisible = false;
         this.currentTroops = {};
