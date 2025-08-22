@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         BOT-TWB - Tribal Wars Bot System (Local Build)
-// @namespace    https://github.com/seu-usuario/BOT-TWB
+// @name         BOT-TWB - Tribal Wars Bot System
+// @namespace    https://github.com/Pelegriinoo/BOT-TWB
 // @version      2.0.0
-// @description  Sistema modular completo para Tribal Wars - Build local
-// @author       BOT-TWB Team
+// @description  Sistema modular completo para Tribal Wars - Bot automatizado
+// @author       Pelegriinoo
 // @match        https://*.tribalwars.com.br/game.php*
 // @match        https://*.tribalwars.net/game.php*
 // @match        https://*.die-staemme.de/game.php*
@@ -12,16 +12,16 @@
 // @match        https://*.guerretribali.it/game.php*
 // @match        https://*.vojnaplemen.si/game.php*
 // @grant        none
-// @updateURL    https://seu-usuario.github.io/BOT-TWB/dist/bot-twb.user.js
-// @downloadURL  https://seu-usuario.github.io/BOT-TWB/dist/bot-twb.user.js
-// @supportURL   https://github.com/seu-usuario/BOT-TWB/issues
-// @homepageURL  https://github.com/seu-usuario/BOT-TWB
+// @updateURL    https://Pelegriinoo.github.io/BOT-TWB/dist/bot-twb.user.js
+// @downloadURL  https://Pelegriinoo.github.io/BOT-TWB/dist/bot-twb.user.js
+// @supportURL   https://github.com/Pelegriinoo/BOT-TWB/issues
+// @homepageURL  https://github.com/Pelegriinoo/BOT-TWB
 // ==/UserScript==
 
 (function() {
     'use strict';
     
-    console.log('🏰 BOT-TWB v2.0.0 - Build Local');
+    console.log('🏰 BOT-TWB v2.0.0 - Iniciado');
 
 // === config/constants.js ===
 /**
