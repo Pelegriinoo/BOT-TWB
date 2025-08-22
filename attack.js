@@ -1,27 +1,12 @@
 /**
- * Módulo Independente de Ataque para Tribal Wars (JavaScript)
- * Pode ser usado por qualquer sistema de agendamento externo
- * 
- * Uso:
- * const attacker = new TribalWarsAttacker();
- * const result = await attacker.sendAttack({
- *   sourceVillage: '12345',
- *   targetCoords: '611|544',
- *   troops: { sword: 1, spear: 100 },
- *   attackType: 'attack'
- * });
+ * TribalWars Attack API - Core Functions Only
+ * Versão limpa para integração com interfaces externas
  */
 
-class TribalWarsAttacker {
+class TribalWarsAttackAPI {
     constructor() {
-        this.lastToken = null;
         this.baseUrl = window.location.origin;
         this.currentVillage = this.getCurrentVillage();
-        
-        // Event listeners para logs
-        this.onLog = null;
-        this.onError = null;
-        this.onSuccess = null;
     }
 
     /**
@@ -29,180 +14,184 @@ class TribalWarsAttacker {
      */
     getCurrentVillage() {
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('village');
+        return urlParams.get('village') || game_data?.village?.id;
     }
 
     /**
-     * Extrai token CSRF da página
+     * Extrai token CSRF da página atual
      */
-    async getToken(villageId = null) {
+    async getCSRFToken(villageId = null) {
+        const village = villageId || this.currentVillage;
+        
+        // Tentar obter token da página atual
+        let token = document.querySelector('input[name="h"]')?.value;
+        if (token) return token;
+        
+        // Buscar em scripts da página
+        const pageHTML = document.documentElement.innerHTML;
+        let match = pageHTML.match(/[&?]h=([a-f0-9]+)/);
+        if (match) return match[1];
+        
+        match = pageHTML.match(/['"]h['"]:\s*['"]([^'"]+)['"]/);
+        if (match) return match[1];
+        
+        // Último recurso: carregar página de ataque
         try {
-            const village = villageId || this.currentVillage;
-            
-            // Múltiplas tentativas de extrair token H
-            let token = document.querySelector('input[name="h"]')?.value;
-            if (token) return token;
-            
-            const pageText = document.documentElement.innerHTML;
-            let match = pageText.match(/[&?]h=([a-f0-9]+)/);
-            if (match) return match[1];
-            
-            const scripts = [...document.querySelectorAll('script')];
-            for (let script of scripts) {
-                match = script.textContent.match(/['"]h['"]:\s*['"]([^'"]+)['"]/);
-                if (match) return match[1];
-                
-                match = script.textContent.match(/&h=([a-f0-9]+)/);
-                if (match) return match[1];
-            }
-            
-            // Se não encontrou, carrega página para obter token
-            const placeUrl = `game.php?village=${village}&screen=place`;
-            const response = await fetch(placeUrl);
+            const response = await fetch(`game.php?village=${village}&screen=place`);
             const html = await response.text();
-            
             const tokenMatch = html.match(/name="h" value="([^"]+)"/);
             return tokenMatch ? tokenMatch[1] : null;
-            
-        } catch (error) {
-            this.log('error', `Erro ao obter token: ${error.message}`);
+        } catch {
             return null;
         }
     }
 
     /**
-     * Envia ataque para coordenadas específicas
+     * Preparar dados de ataque (primeiro passo)
      * 
-     * @param {Object} attackData - Dados do ataque
-     * @param {string} attackData.sourceVillage - ID da vila de origem
-     * @param {string} attackData.targetCoords - Coordenadas no formato "x|y"
-     * @param {string} attackData.targetVillageId - ID da vila alvo (alternativa às coordenadas)
-     * @param {Object} attackData.troops - Tropas {spear: 10, sword: 5, etc.}
-     * @param {string} attackData.attackType - Tipo: 'attack', 'support', 'scout'
-     * @returns {Promise<Object>} Resultado do ataque
+     * @param {Object} attackData
+     * @param {string} attackData.sourceVillage - ID da vila origem
+     * @param {string} attackData.targetCoords - Coordenadas "x|y"
+     * @param {Object} attackData.troops - {spear: 10, sword: 5, ...}
+     * @param {string} attackData.attackType - 'attack', 'support', 'scout'
+     */
+    async prepareAttack(attackData) {
+        const { sourceVillage, targetCoords, troops, attackType = 'attack' } = attackData;
+        
+        if (!this.validateAttackData(attackData)) {
+            throw new Error('Dados de ataque inválidos');
+        }
+
+        const [x, y] = targetCoords.split('|');
+        const token = await this.getCSRFToken(sourceVillage);
+        
+        if (!token) {
+            throw new Error('Token CSRF não encontrado');
+        }
+
+        // Preparar URL baseado no tipo
+        const url = attackType === 'support' 
+            ? `game.php?village=${sourceVillage}&screen=place&mode=support`
+            : `game.php?village=${sourceVillage}&screen=place`;
+
+        // Criar FormData
+        const formData = new FormData();
+        formData.append('x', x);
+        formData.append('y', y);
+        formData.append('target_type', 'coord');
+        formData.append('h', token);
+
+        // Adicionar tropas
+        Object.entries(troops).forEach(([unit, count]) => {
+            if (count > 0) {
+                formData.append(unit, count.toString());
+            }
+        });
+
+        // Adicionar comando
+        if (attackType === 'support') {
+            formData.append('support', 'Apoiar');
+        } else {
+            formData.append('attack', 'Atacar');
+        }
+
+        // Enviar para página de confirmação
+        const confirmUrl = `game.php?village=${sourceVillage}&screen=place&try=confirm`;
+        const response = await fetch(confirmUrl, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro na preparação do ataque');
+        }
+
+        const html = await response.text();
+
+        // Verificar erros
+        if (html.includes('error_box')) {
+            const errorMatch = html.match(/<div[^>]*class="error_box"[^>]*>(.*?)<\/div>/s);
+            const errorMsg = errorMatch 
+                ? errorMatch[1].replace(/<[^>]*>/g, '').trim() 
+                : 'Erro desconhecido';
+            throw new Error(errorMsg);
+        }
+
+        // Extrair dados de confirmação
+        const confirmData = this.extractConfirmationData(html);
+
+        return {
+            confirmData,
+            token,
+            html
+        };
+    }
+
+    /**
+     * Confirmar e enviar ataque (segundo passo)
+     */
+    async confirmAttack(sourceVillage, confirmData, token) {
+        const formData = new FormData();
+        formData.append('h', token);
+
+        // Adicionar dados de confirmação
+        Object.entries(confirmData).forEach(([key, value]) => {
+            if (key !== 'h') {
+                formData.append(key, value);
+            }
+        });
+
+        const finalUrl = `game.php?village=${sourceVillage}&screen=place&action=command&h=${token}`;
+        const response = await fetch(finalUrl, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro na confirmação do ataque');
+        }
+
+        const html = await response.text();
+
+        // Verificar sucesso
+        const isSuccess = html.includes('command_sent') || 
+                         html.includes('enviado') || 
+                         html.includes('sent');
+
+        if (!isSuccess) {
+            throw new Error('Falha na confirmação - verifique tropas disponíveis');
+        }
+
+        // Extrair duração se disponível
+        const durationMatch = html.match(/(\d+):(\d+):(\d+)/);
+        const duration = durationMatch ? `${durationMatch[1]}:${durationMatch[2]}:${durationMatch[3]}` : null;
+
+        return {
+            success: true,
+            duration
+        };
+    }
+
+    /**
+     * Enviar ataque completo (combina preparação + confirmação)
      */
     async sendAttack(attackData) {
         try {
-            this.log('info', `Iniciando ataque: ${JSON.stringify(attackData)}`);
+            // Preparar
+            const prepareResult = await this.prepareAttack(attackData);
+            
+            // Confirmar
+            const confirmResult = await this.confirmAttack(
+                attackData.sourceVillage,
+                prepareResult.confirmData,
+                prepareResult.token
+            );
 
-            // Validação básica
-            if (!this.validateAttackData(attackData)) {
-                throw new Error('Dados de ataque inválidos');
-            }
-
-            const { sourceVillage, targetCoords, targetVillageId, troops, attackType = 'attack' } = attackData;
-
-            // Determinar coordenadas
-            let x, y;
-            if (targetCoords) {
-                if (!targetCoords.match(/^\d+\|\d+$/)) {
-                    throw new Error('Formato de coordenadas inválido (use x|y)');
-                }
-                [x, y] = targetCoords.split('|');
-            } else if (targetVillageId) {
-                // Para ID de vila, precisaríamos consultar a API para obter coordenadas
-                // Por simplicidade, vamos assumir que temos as coordenadas
-                throw new Error('Suporte a targetVillageId requer implementação adicional');
-            } else {
-                throw new Error('Especifique targetCoords ou targetVillageId');
-            }
-
-            // Obter token CSRF
-            const token = await this.getToken(sourceVillage);
-            if (!token) {
-                throw new Error('Token CSRF não encontrado');
-            }
-
-            // Passo 1: Preparar ataque
-            const prepareResult = await this.prepareAttack(sourceVillage, x, y, troops, attackType, token);
-            if (!prepareResult.success) {
-                throw new Error(`Erro na preparação: ${prepareResult.error}`);
-            }
-
-            // Passo 2: Confirmar ataque
-            const confirmResult = await this.confirmAttack(sourceVillage, prepareResult.confirmData, token);
-            if (!confirmResult.success) {
-                throw new Error(`Erro na confirmação: ${confirmResult.error}`);
-            }
-
-            this.log('success', `Ataque enviado com sucesso para ${targetCoords || targetVillageId}!`);
             return {
                 success: true,
-                message: `Ataque enviado para ${targetCoords || targetVillageId}`,
+                message: `Ataque enviado para ${attackData.targetCoords}`,
                 duration: confirmResult.duration,
-                target: targetCoords || targetVillageId
-            };
-
-        } catch (error) {
-            this.log('error', `Erro no envio do ataque: ${error.message}`);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
-
-    /**
-     * Prepara o ataque (primeiro passo)
-     */
-    async prepareAttack(villageId, x, y, troops, attackType, token) {
-        try {
-            // Preparar URL baseado no tipo de ataque
-            let url;
-            if (attackType === 'support') {
-                url = `game.php?village=${villageId}&screen=place&mode=support`;
-            } else {
-                url = `game.php?village=${villageId}&screen=place`;
-            }
-
-            // Preparar dados do formulário
-            const formData = new FormData();
-            formData.append('x', x);
-            formData.append('y', y);
-            formData.append('target_type', 'coord');
-            formData.append('h', token);
-
-            // Adicionar tropas
-            Object.entries(troops).forEach(([unit, count]) => {
-                if (count > 0) {
-                    formData.append(unit, count);
-                }
-            });
-
-            // Adicionar comando baseado no tipo
-            if (attackType === 'support') {
-                formData.append('support', 'Ondersteunen');
-            } else {
-                formData.append('attack', 'Atacar');
-            }
-
-            // Enviar para confirmação
-            const confirmUrl = `game.php?village=${villageId}&screen=place&try=confirm`;
-            const response = await fetch(confirmUrl, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error('Erro na requisição de preparação');
-            }
-
-            const html = await response.text();
-
-            // Verificar erros
-            if (html.includes('error_box') || html.includes('Erro')) {
-                const errorMatch = html.match(/<div[^>]*class="error_box"[^>]*>(.*?)<\/div>/s);
-                const errorMsg = errorMatch ? errorMatch[1].replace(/<[^>]*>/g, '').trim() : 'Erro desconhecido';
-                throw new Error(`Erro do jogo: ${errorMsg}`);
-            }
-
-            // Extrair dados de confirmação
-            const confirmData = this.extractConfirmData(html);
-
-            return {
-                success: true,
-                confirmData: confirmData,
-                html: html
+                target: attackData.targetCoords
             };
 
         } catch (error) {
@@ -214,66 +203,11 @@ class TribalWarsAttacker {
     }
 
     /**
-     * Confirma o ataque (segundo passo)
+     * Extrair dados de confirmação do HTML
      */
-    async confirmAttack(villageId, confirmData, token) {
-        try {
-            const finalData = new FormData();
-            finalData.append('h', token);
-
-            // Adicionar todos os dados de confirmação
-            Object.entries(confirmData).forEach(([key, value]) => {
-                if (key !== 'h') {
-                    finalData.append(key, value);
-                }
-            });
-
-            // Confirmar ataque
-            const finalUrl = `game.php?village=${villageId}&screen=place&action=command&h=${token}`;
-            const response = await fetch(finalUrl, {
-                method: 'POST',
-                body: finalData
-            });
-
-            if (!response.ok) {
-                throw new Error('Erro na confirmação do ataque');
-            }
-
-            const html = await response.text();
-
-            // Verificar se foi bem-sucedido
-            if (html.includes('command_sent') || html.includes('enviado')) {
-                // Extrair duração se possível
-                const durationMatch = html.match(/(\d+):(\d+):(\d+)/);
-                let duration = null;
-                if (durationMatch) {
-                    const [, hours, minutes, seconds] = durationMatch;
-                    duration = `${hours}:${minutes}:${seconds}`;
-                }
-
-                return {
-                    success: true,
-                    duration: duration
-                };
-            } else {
-                throw new Error('Confirmação falhou - verifique se há tropas suficientes');
-            }
-
-        } catch (error) {
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
-
-    /**
-     * Extrai dados de confirmação do HTML
-     */
-    extractConfirmData(html) {
+    extractConfirmationData(html) {
         const confirmData = {};
         
-        // Extrair todos os inputs hidden
         const hiddenInputs = html.match(/<input[^>]*type="hidden"[^>]*>/g) || [];
         hiddenInputs.forEach(input => {
             const nameMatch = input.match(/name="([^"]+)"/);
@@ -287,225 +221,126 @@ class TribalWarsAttacker {
     }
 
     /**
-     * Valida dados do ataque
+     * Validar dados de entrada
      */
     validateAttackData(data) {
-        if (!data) return false;
-        if (!data.sourceVillage) return false;
-        if (!data.targetCoords && !data.targetVillageId) return false;
-        if (!data.troops || Object.keys(data.troops).length === 0) return false;
+        if (!data || !data.sourceVillage || !data.targetCoords || !data.troops) {
+            return false;
+        }
 
-        // Verificar se há pelo menos 1 tropa
+        // Verificar formato de coordenadas
+        if (!data.targetCoords.match(/^\d+\|\d+$/)) {
+            return false;
+        }
+
+        // Verificar se há pelo menos uma tropa
         const hasTroops = Object.values(data.troops).some(count => count > 0);
-        if (!hasTroops) return false;
-
-        return true;
+        return hasTroops;
     }
 
     /**
-     * Sistema de logging
+     * Obter tropas disponíveis na vila
      */
-    log(type, message) {
-        const timestamp = new Date().toLocaleTimeString();
-        const logMessage = `[${timestamp}] ${message}`;
+    async getAvailableTroops(villageId = null) {
+        const village = villageId || this.currentVillage;
         
-        console.log(`[TWAttacker] ${logMessage}`);
-        
-        // Disparar eventos personalizados
-        switch (type) {
-            case 'error':
-                if (this.onError) this.onError(logMessage);
-                break;
-            case 'success':
-                if (this.onSuccess) this.onSuccess(logMessage);
-                break;
-            default:
-                if (this.onLog) this.onLog(logMessage);
+        try {
+            const response = await fetch(`game.php?village=${village}&screen=place`);
+            const html = await response.text();
+            
+            const troops = {};
+            const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
+            
+            unitTypes.forEach(unit => {
+                const match = html.match(new RegExp(`name="${unit}"[^>]*>\\s*(\\d+)`, 'i'));
+                if (match) {
+                    troops[unit] = parseInt(match[1]);
+                }
+            });
+            
+            return troops;
+        } catch (error) {
+            throw new Error(`Erro ao obter tropas: ${error.message}`);
         }
     }
 
     /**
-     * Configurar callbacks de eventos
+     * Verificar se coordenadas são válidas
      */
-    setEventListeners(callbacks) {
-        this.onLog = callbacks.onLog || null;
-        this.onError = callbacks.onError || null;
-        this.onSuccess = callbacks.onSuccess || null;
+    async validateTarget(targetCoords) {
+        const [x, y] = targetCoords.split('|');
+        
+        // Validação básica de range (mapas Tribal Wars geralmente são até 1000x1000)
+        if (x < 0 || x > 1000 || y < 0 || y > 1000) {
+            return { valid: false, reason: 'Coordenadas fora do mapa' };
+        }
+
+        return { valid: true };
+    }
+
+    /**
+     * Calcular tempo de viagem entre coordenadas
+     */
+    calculateTravelTime(sourceCoords, targetCoords, slowestUnit) {
+        const [x1, y1] = sourceCoords.split('|').map(Number);
+        const [x2, y2] = targetCoords.split('|').map(Number);
+        
+        const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        
+        // Velocidades básicas (minutos por campo)
+        const speeds = {
+            snob: 35, ram: 30, catapult: 30, knight: 10, heavy: 11,
+            sword: 22, axe: 18, archer: 18, spy: 9, light: 10,
+            marcher: 5, spear: 18
+        };
+        
+        const speed = speeds[slowestUnit] || 18;
+        const travelMinutes = Math.round(distance * speed);
+        
+        return {
+            distance: Math.round(distance * 100) / 100,
+            travelTime: travelMinutes,
+            arrivalTime: new Date(Date.now() + travelMinutes * 60 * 1000)
+        };
     }
 }
 
 // ==========================================
-// EXEMPLO DE USO COM AGENDADOR
+// FUNÇÕES UTILITÁRIAS
 // ==========================================
 
 /**
- * Classe de exemplo para agendamento de ataques
+ * Criar instância global
  */
-class AttackScheduler {
-    constructor() {
-        this.attacker = new TribalWarsAttacker();
-        this.scheduledAttacks = new Map();
-        this.isRunning = false;
-
-        // Configurar callbacks
-        this.attacker.setEventListeners({
-            onLog: (msg) => this.log(`INFO: ${msg}`),
-            onError: (msg) => this.log(`ERROR: ${msg}`),
-            onSuccess: (msg) => this.log(`SUCCESS: ${msg}`)
-        });
-    }
-
-    /**
-     * Agendar um ataque
-     * 
-     * @param {string} id - ID único do ataque
-     * @param {Date} scheduledTime - Horário agendado
-     * @param {Object} attackData - Dados do ataque
-     */
-    scheduleAttack(id, scheduledTime, attackData) {
-        this.scheduledAttacks.set(id, {
-            id,
-            scheduledTime,
-            attackData,
-            status: 'scheduled'
-        });
-
-        this.log(`Ataque agendado: ${id} para ${scheduledTime.toLocaleString()}`);
-        
-        if (!this.isRunning) {
-            this.startScheduler();
-        }
-    }
-
-    /**
-     * Iniciar o agendador
-     */
-    startScheduler() {
-        if (this.isRunning) return;
-        
-        this.isRunning = true;
-        this.log('Agendador iniciado');
-        
-        this.schedulerInterval = setInterval(() => {
-            this.checkScheduledAttacks();
-        }, 1000); // Verificar a cada segundo
-    }
-
-    /**
-     * Parar o agendador
-     */
-    stopScheduler() {
-        if (this.schedulerInterval) {
-            clearInterval(this.schedulerInterval);
-        }
-        this.isRunning = false;
-        this.log('Agendador parado');
-    }
-
-    /**
-     * Verificar ataques agendados
-     */
-    async checkScheduledAttacks() {
-        const now = new Date();
-        
-        for (const [id, attack] of this.scheduledAttacks) {
-            if (attack.status === 'scheduled' && now >= attack.scheduledTime) {
-                attack.status = 'executing';
-                this.log(`Executando ataque: ${id}`);
-                
-                try {
-                    const result = await this.attacker.sendAttack(attack.attackData);
-                    
-                    if (result.success) {
-                        attack.status = 'completed';
-                        this.log(`Ataque ${id} enviado com sucesso!`);
-                    } else {
-                        attack.status = 'failed';
-                        this.log(`Ataque ${id} falhou: ${result.error}`);
-                    }
-                } catch (error) {
-                    attack.status = 'failed';
-                    this.log(`Erro ao executar ataque ${id}: ${error.message}`);
-                }
-            }
-        }
-    }
-
-    /**
-     * Remover ataque agendado
-     */
-    removeAttack(id) {
-        if (this.scheduledAttacks.has(id)) {
-            this.scheduledAttacks.delete(id);
-            this.log(`Ataque removido: ${id}`);
-        }
-    }
-
-    /**
-     * Listar ataques agendados
-     */
-    listAttacks() {
-        return Array.from(this.scheduledAttacks.values());
-    }
-
-    /**
-     * Logging
-     */
-    log(message) {
-        console.log(`[AttackScheduler] ${new Date().toLocaleTimeString()} - ${message}`);
-    }
+function createAttackAPI() {
+    return new TribalWarsAttackAPI();
 }
 
-// ==========================================
-// EXEMPLO DE USO PRÁTICO
-// ==========================================
-
-/*
-// Exemplo 1: Uso direto
-const attacker = new TribalWarsAttacker();
-
-const result = await attacker.sendAttack({
-    sourceVillage: '12345',
-    targetCoords: '611|544',
-    troops: { sword: 1, spear: 100 },
-    attackType: 'attack'
-});
-
-console.log(result);
-
-// Exemplo 2: Uso com agendador
-const scheduler = new AttackScheduler();
-
-// Agendar ataque para daqui a 5 minutos
-const attackTime = new Date(Date.now() + 5 * 60 * 1000);
-
-scheduler.scheduleAttack('farm_001', attackTime, {
-    sourceVillage: '12345',
-    targetCoords: '611|544',
-    troops: { sword: 1 },
-    attackType: 'attack'
-});
-
-// Exemplo 3: Interface simples
-function createSimpleInterface() {
-    const button = document.createElement('button');
-    button.textContent = 'Enviar Ataque Teste';
-    button.onclick = async () => {
-        const attacker = new TribalWarsAttacker();
-        const result = await attacker.sendAttack({
-            sourceVillage: attacker.getCurrentVillage(),
-            targetCoords: '611|544',
-            troops: { sword: 1 },
-            attackType: 'attack'
-        });
-        alert(result.success ? 'Sucesso!' : `Erro: ${result.error}`);
-    };
-    document.body.appendChild(button);
+/**
+ * Envio rápido de ataque
+ */
+async function quickAttack(targetCoords, troops, attackType = 'attack') {
+    const api = new TribalWarsAttackAPI();
+    
+    return await api.sendAttack({
+        sourceVillage: api.getCurrentVillage(),
+        targetCoords,
+        troops,
+        attackType
+    });
 }
-*/
+
+/**
+ * Verificar se sistema está disponível
+ */
+function isSystemReady() {
+    return !!(window.game_data && window.game_data.village);
+}
 
 // Exportar para uso global
 if (typeof window !== 'undefined') {
-    window.TribalWarsAttacker = TribalWarsAttacker;
-    window.AttackScheduler = AttackScheduler;
+    window.TribalWarsAttackAPI = TribalWarsAttackAPI;
+    window.createAttackAPI = createAttackAPI;
+    window.quickAttack = quickAttack;
+    window.isSystemReady = isSystemReady;
 }
