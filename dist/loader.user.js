@@ -26,6 +26,7 @@
     // Configuração do loader
     const LOADER_CONFIG = {
         baseUrl: 'https://Pelegriinoo.github.io/BOT-TWB/dist/modules/',
+        fallbackUrl: 'https://raw.githubusercontent.com/Pelegriinoo/BOT-TWB/main/dist/modules/',
         version: '2.0.0',
         timeout: 15000, // 15 segundos
         retries: 3
@@ -49,7 +50,7 @@
     /**
      * Carrega um script remoto
      */
-    async function loadScript(url, retries = LOADER_CONFIG.retries) {
+    async function loadScript(url, retries = LOADER_CONFIG.retries, useFallback = false) {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.type = 'text/javascript';
@@ -73,8 +74,13 @@
                 if (retries > 0) {
                     console.warn(`⚠️ Erro ao carregar ${url}, tentando novamente... (${retries} tentativas restantes)`);
                     setTimeout(() => {
-                        loadScript(url, retries - 1).then(resolve).catch(reject);
+                        loadScript(url, retries - 1, useFallback).then(resolve).catch(reject);
                     }, 1000);
+                } else if (!useFallback && LOADER_CONFIG.fallbackUrl) {
+                    // Tentar com URL de fallback
+                    const fallbackUrl = url.replace(LOADER_CONFIG.baseUrl, LOADER_CONFIG.fallbackUrl);
+                    console.warn(`🔄 Tentando URL de fallback: ${fallbackUrl}`);
+                    loadScript(fallbackUrl, LOADER_CONFIG.retries, true).then(resolve).catch(reject);
                 } else {
                     reject(new Error(`Falha ao carregar: ${url}`));
                 }
