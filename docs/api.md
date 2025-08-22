@@ -1,3 +1,0 @@
-# Documentação da API
-
-// ...documentação futura...

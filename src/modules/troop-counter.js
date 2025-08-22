@@ -1,3 +1,0 @@
-// Contador de tropas
-
-// ...implementação futura...

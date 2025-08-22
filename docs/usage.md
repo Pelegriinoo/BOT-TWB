@@ -1,3 +1,0 @@
-# Guia de Uso
-
-// ...documentação futura...
