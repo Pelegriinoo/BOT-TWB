@@ -1,0 +1,3 @@
+// Componentes reutilizáveis
+
+// ...implementação futura...

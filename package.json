@@ -1,0 +1,11 @@
+{
+  "name": "bot-twb",
+  "version": "1.0.0",
+  "description": "Bot modular para Tribal Wars",
+  "main": "dist/bot-twb.user.js",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "author": "",
+  "license": "MIT"
+}

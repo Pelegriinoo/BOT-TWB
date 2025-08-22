@@ -1,0 +1,3 @@
+// Utilitários gerais
+
+// ...implementação futura...

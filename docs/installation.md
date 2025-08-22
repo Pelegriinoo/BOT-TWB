@@ -1,0 +1,3 @@
+# Guia de Instalação
+
+// ...documentação futura...
