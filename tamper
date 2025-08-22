@@ -1,0 +1,295 @@
+// ==UserScript==
+// @name         BOT-TWB Loader - jsDelivr CDN ONLY
+// @namespace    https://github.com/Pelegriinoo/BOT-TWB
+// @version      2.1.0
+// @description  Loader otimizado - USA APENAS jsDelivr CDN (funciona sempre!)
+// @author       Pelegriinoo
+// @match        https://*.tribalwars.com.br/game.php*
+// @match        https://*.tribalwars.net/game.php*
+// @match        https://*.die-staemme.de/game.php*
+// @match        https://*.plemiona.pl/game.php*
+// @match        https://*.tribals.it/game.php*
+// @match        https://*.guerretribali.it/game.php*
+// @match        https://*.vojnaplemen.si/game.php*
+// @grant        none
+// @updateURL    https://cdn.jsdelivr.net/gh/Pelegriinoo/BOT-TWB@main/dist/loader.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/Pelegriinoo/BOT-TWB@main/dist/loader.user.js
+// @supportURL   https://github.com/Pelegriinoo/BOT-TWB/issues
+// @homepageURL  https://github.com/Pelegriinoo/BOT-TWB
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    console.log('🚀 BOT-TWB Loader v2.1.0 - jsDelivr CDN ONLY');
+
+    // ⚡ CONFIGURAÇÃO SUPER SIMPLES - APENAS jsDelivr!
+    const LOADER_CONFIG = {
+        // 🌟 USA APENAS jsDelivr CDN (99.9% confiabilidade)
+        baseUrl: 'https://cdn.jsdelivr.net/gh/Pelegriinoo/BOT-TWB@main/dist/modules/',
+        version: '2.1.0',
+        timeout: 10000, // 10 segundos (mais que suficiente)
+        retries: 2      // Apenas 2 tentativas (jsDelivr é confiável)
+    };
+
+    // Módulos para carregar em ordem
+    const MODULES = [
+        'constants.js',
+        'api.js',
+        'auth.js',
+        'troops.js',
+        'utils.js',
+        'attack-system.js',
+        'troop-counter.js',
+        'village-manager.js',
+        'ui-components.js',
+        'main-interface.js',
+        'system.js'
+    ];
+
+    /**
+     * Carrega um script via jsDelivr CDN
+     */
+    async function loadScript(url, retries = LOADER_CONFIG.retries) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = url;
+
+            const timeout = setTimeout(() => {
+                script.remove();
+                reject(new Error(`Timeout: ${url}`));
+            }, LOADER_CONFIG.timeout);
+
+            script.onload = () => {
+                clearTimeout(timeout);
+                console.log(`✅ ${url.split('/').pop()} - Carregado via jsDelivr`);
+                resolve();
+            };
+
+            script.onerror = () => {
+                clearTimeout(timeout);
+                script.remove();
+
+                if (retries > 0) {
+                    console.warn(`⚠️ Tentativa ${3-retries}/2 falhou, tentando novamente...`);
+                    setTimeout(() => {
+                        loadScript(url, retries - 1).then(resolve).catch(reject);
+                    }, 1000);
+                } else {
+                    reject(new Error(`Falha: ${url}`));
+                }
+            };
+
+            document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Carrega todos os módulos via jsDelivr
+     */
+    async function loadAllModules() {
+        const indicator = createLoadingIndicator();
+
+        try {
+            console.log('📦 Carregando via jsDelivr CDN...');
+
+            for (let i = 0; i < MODULES.length; i++) {
+                const module = MODULES[i];
+                const url = LOADER_CONFIG.baseUrl + module;
+
+                updateProgress(indicator, i, MODULES.length, module);
+                await loadScript(url);
+
+                // Pequeno delay para não sobrecarregar
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+
+            updateProgress(indicator, MODULES.length, MODULES.length, 'Concluído');
+
+            setTimeout(() => {
+                indicator.remove();
+                showSuccess();
+            }, 1000);
+
+            console.log('🎉 BOT-TWB carregado 100% via jsDelivr!');
+
+        } catch (error) {
+            console.error('💥 Erro:', error);
+            indicator.remove();
+            showError(error.message);
+        }
+    }
+
+    /**
+     * Cria indicador visual
+     */
+    function createLoadingIndicator() {
+        const indicator = document.createElement('div');
+        indicator.id = 'twb-loading';
+        indicator.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            padding: 16px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 2px solid #0f3460;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 999999;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #e94560;
+            font-size: 13px;
+        `;
+
+        indicator.innerHTML = `
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                <div style="font-size: 16px; font-weight: bold;">⚡ BOT-TWB</div>
+                <div style="margin-left: auto; font-size: 11px; color: #0f3460;">jsDelivr v${LOADER_CONFIG.version}</div>
+            </div>
+            <div style="margin-bottom: 10px; font-weight: 500;">🌐 Carregando via jsDelivr CDN...</div>
+            <div style="background: #0f1419; border: 1px solid #0f3460; border-radius: 6px; height: 10px; overflow: hidden;">
+                <div id="twb-progress" style="background: linear-gradient(90deg, #e94560, #f39c12); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <div id="twb-status" style="margin-top: 10px; font-size: 11px; color: #0f3460;">Preparando...</div>
+        `;
+
+        document.body.appendChild(indicator);
+        return indicator;
+    }
+
+    /**
+     * Atualiza progresso
+     */
+    function updateProgress(indicator, current, total, module) {
+        const progress = (current / total) * 100;
+        const progressBar = indicator.querySelector('#twb-progress');
+        const status = indicator.querySelector('#twb-status');
+
+        if (progressBar) {
+            progressBar.style.width = progress + '%';
+        }
+
+        if (status) {
+            if (current === total) {
+                status.textContent = '✅ Carregamento concluído!';
+                status.style.color = '#27ae60';
+            } else {
+                status.textContent = `📦 ${module} (${current + 1}/${total})`;
+            }
+        }
+    }
+
+    /**
+     * Mensagem de sucesso
+     */
+    function showSuccess() {
+        const message = document.createElement('div');
+        message.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+            border: 2px solid #219a52;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(39,174,96,0.3);
+            z-index: 999999;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+            font-weight: 500;
+        `;
+
+        message.innerHTML = `
+            ⚡ <strong>BOT-TWB v${LOADER_CONFIG.version}</strong> carregado!<br>
+            <small>🌐 Via jsDelivr CDN • Pressione Ctrl+Shift+T</small>
+        `;
+
+        document.body.appendChild(message);
+        setTimeout(() => message.remove(), 5000);
+    }
+
+    /**
+     * Mensagem de erro
+     */
+    function showError(error) {
+        const message = document.createElement('div');
+        message.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: 2px solid #a93226;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(231,76,60,0.3);
+            z-index: 999999;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+        `;
+
+        message.innerHTML = `
+            ❌ <strong>Erro no BOT-TWB</strong><br>
+            <small>${error}</small><br>
+            <button onclick="this.parentElement.remove()" style="
+                margin-top: 10px; padding: 6px 12px; background: #a93226;
+                color: white; border: none; border-radius: 6px; cursor: pointer;
+                font-size: 12px; font-weight: 500;
+            ">Fechar</button>
+        `;
+
+        document.body.appendChild(message);
+    }
+
+    /**
+     * Verifica se está no jogo
+     */
+    function isInGame() {
+        return window.location.pathname.includes('game.php') &&
+               document.querySelector('#content_value');
+    }
+
+    /**
+     * Inicialização
+     */
+    function init() {
+        if (!isInGame()) {
+            console.log('⏭️ Não está no jogo, aguardando...');
+            return;
+        }
+
+        // Aguardar DOM carregar
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(loadAllModules, 300);
+            });
+        } else {
+            setTimeout(loadAllModules, 300);
+        }
+    }
+
+    // ⚡ API de debug
+    window.TWBLoader = {
+        version: LOADER_CONFIG.version,
+        reload: loadAllModules,
+        config: LOADER_CONFIG,
+        testUrl: () => {
+            const testUrl = LOADER_CONFIG.baseUrl + 'constants.js';
+            console.log('🧪 Teste esta URL:', testUrl);
+            window.open(testUrl, '_blank');
+        }
+    };
+
+    // 🚀 Iniciar
+    init();
+
+    console.log('💡 Digite TWBLoader.testUrl() para testar a conexão jsDelivr');
+
+})();
