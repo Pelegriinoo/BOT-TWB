@@ -1,0 +1,3 @@
+// Exemplo de ataque básico usando o BOT-TWB
+
+// ... implementação ...
