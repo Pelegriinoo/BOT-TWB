@@ -62,7 +62,7 @@ class GameDataCollector {
             world: {
                 id: game_data.world,
                 speed: game_data.speed,
-                unitSpeed: game_data.config.unit_speed,
+                unitSpeed: game_data.config && game_data.config.unit_speed ? game_data.config.unit_speed : 1,
                 locale: game_data.locale
             },
             screen: game_data.screen,

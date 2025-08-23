@@ -166,14 +166,33 @@ class WorldConfig {
             // Tentar obter dados de configuração do mundo via interface do jogo
             const response = await fetch('/interface.php?func=get_config');
             if (response.ok) {
-                const serverConfig = await response.xml ? 
-                    this.parseConfigXML(await response.text()) : 
-                    await response.json();
+                const contentType = response.headers.get('content-type');
+                
+                let serverConfig;
+                if (contentType && contentType.includes('xml')) {
+                    // Resposta é XML
+                    serverConfig = this.parseConfigXML(await response.text());
+                } else if (contentType && contentType.includes('json')) {
+                    // Resposta é JSON
+                    serverConfig = await response.json();
+                } else {
+                    // Tentar detectar automaticamente
+                    const text = await response.text();
+                    try {
+                        // Tentar primeiro como JSON
+                        serverConfig = JSON.parse(text);
+                    } catch {
+                        // Se falhar, tentar como XML
+                        serverConfig = this.parseConfigXML(text);
+                    }
+                }
                 
                 this.mergeServerConfig(serverConfig);
             }
         } catch (error) {
-            console.warn('⚠️ Não foi possível carregar config do servidor:', error);
+            console.warn('⚠️ Não foi possível carregar config do servidor:', error.message);
+            // Usar configurações padrão em caso de erro
+            this.useDefaultConfig();
         }
     }
 
@@ -208,6 +227,15 @@ class WorldConfig {
             console.warn('⚠️ Erro ao fazer parse do XML:', error);
             return {};
         }
+    }
+
+    /**
+     * Usa configurações padrão quando não é possível carregar do servidor
+     */
+    useDefaultConfig() {
+        console.log('📋 Usando configurações padrão do mundo');
+        // As configurações padrão já estão definidas no construtor
+        // Apenas log para informar que estamos usando valores padrão
     }
 
     /**
