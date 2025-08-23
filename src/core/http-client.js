@@ -630,6 +630,7 @@ function getHttpClient() {
 // Registrar globalmente
 if (typeof window !== 'undefined') {
     window.HttpClient = HttpClient;
+    console.log('✅ HttpClient exportado para window');
     window.createHttpClient = createHttpClient;
     window.getHttpClient = getHttpClient;
     

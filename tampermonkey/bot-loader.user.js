@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         BOT-TWB - Sistema de Bot para Tribal Wars Brasil
 // @namespace    https://github.com/Pelegriinoo/BOT-TWB
-// @version      2.0.0
-// @description  Sistema completo de automação para Tribal Wars Brasil - Otimizado para servidores brasileiros
+// @version      2.0.1
+// @description  Sistema completo de automação para Tribal Wars Brasil - Versão Corrigida
 // @author       Pelegrino
 // @match        *://*.tribalwars.com.br/*
 // @match        *://*.tribos.com.pt/*
@@ -49,13 +49,12 @@
             'src/config/unit-speeds.js',
             'src/config/world-config.js'
         ],
-        version: '2.0.0-BR',
-        checkInterval: 30000, // 30 segundos
+        version: '2.0.1-BR',
+        checkInterval: 30000,
         locale: 'pt-BR',
         serverType: 'brasil'
     };
 
-    // Configurações específicas para o Brasil
     const BRASIL_CONFIG = {
         unitNames: {
             spear: 'Lanceiro',
@@ -91,13 +90,11 @@
             this.retryCount = new Map();
             this.maxRetries = 3;
             this.serverInfo = this.detectServerInfo();
+            this.globalClasses = new Map(); // Para rastrear classes carregadas
 
             this.init();
         }
 
-        /**
-         * Detecta informações específicas do servidor brasileiro
-         */
         detectServerInfo() {
             const hostname = window.location.hostname;
             const serverInfo = {
@@ -113,22 +110,17 @@
             return serverInfo;
         }
 
-        /**
-         * Extrai número do mundo da URL
-         */
         extractWorldNumber(hostname) {
             const match = hostname.match(/br(\d+)|mundo(\d+)|(\d+)/);
             return match ? (match[1] || match[2] || match[3]) : 'desconhecido';
         }
 
         async init() {
-            // Verificar se está no Tribal Wars Brasil/Portugal
             if (!this.isTribalWarsBrasil()) {
                 console.log(BRASIL_CONFIG.messages.notTribalWars);
                 return;
             }
 
-            // Aguardar carregamento da página
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', () => this.start());
             } else {
@@ -149,19 +141,10 @@
             console.log(BRASIL_CONFIG.messages.loading);
 
             try {
-                // Configurar idioma
                 this.setupLocale();
-
-                // Verificar versão
                 await this.checkForUpdates();
-
-                // Carregar dependências
                 await this.loadDependencies();
-
-                // Carregar arquivos do bot
                 await this.loadBotFiles();
-
-                // Inicializar bot com configurações brasileiras
                 await this.initializeBot();
 
                 console.log(BRASIL_CONFIG.messages.success);
@@ -173,11 +156,7 @@
             }
         }
 
-        /**
-         * Configura idioma e formatações brasileiras
-         */
         setupLocale() {
-            // Configurar formatações brasileiras
             window.BRASIL_LOCALE = {
                 currency: 'R$',
                 dateFormat: 'dd/mm/yyyy',
@@ -193,15 +172,20 @@
         async loadBotFiles() {
             console.log(BRASIL_CONFIG.messages.filesLoaded);
 
-            const promises = CONFIG.files.map(file => this.loadFile(file));
-            const results = await Promise.allSettled(promises);
+            // Carregar arquivos sequencialmente para garantir ordem
+            for (const file of CONFIG.files) {
+                try {
+                    await this.loadFile(file);
+                    // Pequena pausa para garantir execução
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (error) {
+                    console.error(`❌ Erro ao carregar ${file}:`, error);
+                }
+            }
 
-            // Verificar falhas
-            const failed = results.filter(result => result.status === 'rejected');
-            if (failed.length > 0) {
-                console.warn(`⚠️ ${failed.length} arquivo(s) falharam ao carregar`);
-
-                // Tentar novamente arquivos que falharam
+            // Verificar falhas e tentar novamente
+            if (this.failedFiles.size > 0) {
+                console.warn(`⚠️ ${this.failedFiles.size} arquivo(s) falharam ao carregar`);
                 await this.retryFailedFiles();
             }
         }
@@ -223,7 +207,6 @@
                 this.failedFiles.add(filePath);
                 const retries = this.retryCount.get(filePath) || 0;
                 this.retryCount.set(filePath, retries + 1);
-
                 console.error(`❌ Falha ao carregar ${filePath}:`, error.message);
                 throw error;
             }
@@ -234,7 +217,7 @@
                 GM_xmlhttpRequest({
                     method: 'GET',
                     url: url,
-                    timeout: 15000, // 15 segundos - conexões do Brasil podem ser mais lentas
+                    timeout: 15000,
                     onload: function(response) {
                         if (response.status === 200) {
                             resolve(response.responseText);
@@ -255,22 +238,27 @@
         async injectScript(code, filePath) {
             return new Promise((resolve, reject) => {
                 try {
-                    // Converter exports ES6 para compatibilidade com userscripts
-                    const processedCode = this.processES6Code(code, filePath);
+                    // Processar código para garantir exportação global
+                    const processedCode = this.processCodeForGlobalExport(code, filePath);
                     
                     const script = document.createElement('script');
                     script.type = 'text/javascript';
                     script.setAttribute('data-file', filePath);
+                    script.setAttribute('data-timestamp', Date.now().toString());
                     
                     script.textContent = `
                         // Arquivo: ${filePath}
-                        // Carregado em: ${new Date().toLocaleString('pt-BR')}
-                        // Servidor: ${this.serverInfo.domain} (Mundo ${this.serverInfo.worldNumber})
+                        // Carregado: ${new Date().toLocaleString('pt-BR')}
+                        // Servidor: ${this.serverInfo.domain}
                         
                         (function() {
                             'use strict';
                             try {
                                 ${processedCode}
+                                
+                                // Log de sucesso específico para debug
+                                console.log('📦 Arquivo ${filePath} executado com sucesso');
+                                
                             } catch (error) {
                                 console.error('❌ Erro ao executar ${filePath}:', error);
                                 throw error;
@@ -283,7 +271,7 @@
                     script.onerror = (error) => {
                         if (!executed) {
                             executed = true;
-                            console.error(`❌ Erro ao carregar script ${filePath}:`, error);
+                            console.error(`❌ Erro no script ${filePath}:`, error);
                             reject(error);
                         }
                     };
@@ -297,13 +285,17 @@
 
                     document.head.appendChild(script);
 
-                    // Resolve após um tempo para scripts inline
+                    // Aguardar execução e verificar se classe foi exportada
                     setTimeout(() => {
                         if (!executed) {
                             executed = true;
+                            // Verificar após um delay adicional para garantir que a classe foi exportada
+                            setTimeout(() => {
+                                this.verifyClassExport(filePath);
+                            }, 100);
                             resolve();
                         }
-                    }, 200);
+                    }, 500);
 
                 } catch (error) {
                     console.error(`❌ Erro ao processar ${filePath}:`, error);
@@ -313,41 +305,30 @@
         }
 
         /**
-         * Processa código ES6 para compatibilidade
+         * Processa código para garantir exportação global correta
          */
-        processES6Code(code, filePath) {
-            // Remover exports ES6 simples que causam erros
+        processCodeForGlobalExport(code, filePath) {
             let processedCode = code;
             
-            // Remover linhas que começam com export function
+            // Remover exports ES6 problemáticos
             processedCode = processedCode.replace(/^\s*export\s+function\s+/gm, 'function ');
-            
-            // Remover outras declarações export problemáticas
             processedCode = processedCode.replace(/^\s*export\s+\{[^}]*\}\s*;?\s*$/gm, '');
             processedCode = processedCode.replace(/^\s*export\s+default\s+/gm, '');
             
-            // Garantir que classes sejam exportadas para window
-            processedCode = this.ensureGlobalExports(processedCode, filePath);
-            
-            return processedCode;
-        }
-
-        /**
-         * Garante que classes importantes sejam exportadas para window
-         */
-        ensureGlobalExports(code, filePath) {
+            // Mapeamento específico de classes por arquivo
             const classExports = {
                 'src/core/bot-core.js': ['TribalWarsBot'],
                 'src/core/game-data.js': ['GameDataCollector'],
                 'src/core/http-client.js': ['HttpClient'],
+                'src/core/utils.js': ['BotUtils'],
                 'src/modules/troops-collector.js': ['TroopsCollector'],
                 'src/modules/attack-system.js': ['AttackSystem'],
                 'src/modules/village-finder.js': ['VillageFinder'],
                 'src/modules/distance-calculator.js': ['DistanceCalculator'],
                 'src/modules/timing-controller.js': ['TimingController'],
                 'src/ui/interface.js': ['BotInterface'],
-                'src/ui/components.js': ['BotComponents'],
-                'src/config/settings.js': ['Settings'],
+                'src/ui/components.js': ['UIComponents'],
+                'src/config/settings.js': ['BotSettings'],
                 'src/config/unit-speeds.js': ['UnitSpeedCalculator'],
                 'src/config/world-config.js': ['WorldConfig']
             };
@@ -355,22 +336,82 @@
             const classesToExport = classExports[filePath];
             
             if (classesToExport && classesToExport.length > 0) {
-                let exportCode = '\n\n// Exportações globais automáticas\n';
-                exportCode += 'if (typeof window !== \'undefined\') {\n';
+                let exportCode = '\n\n// === EXPORTAÇÃO GLOBAL FORÇADA ===\n';
+                exportCode += '(function() {\n';
+                exportCode += '    try {\n';
                 
                 classesToExport.forEach(className => {
-                    exportCode += `    if (typeof ${className} !== 'undefined' && !window.${className}) {\n`;
-                    exportCode += `        window.${className} = ${className};\n`;
-                    exportCode += `        console.log('✅ ${className} exportado para window global');\n`;
-                    exportCode += `    }\n`;
+                    exportCode += `        // Exportar ${className}\n`;
+                    exportCode += `        if (typeof ${className} !== 'undefined') {\n`;
+                    exportCode += `            window.${className} = ${className};\n`;
+                    exportCode += `            console.log('✅ ${className} exportado para window');\n`;
+                    exportCode += `        } else {\n`;
+                    exportCode += `            console.warn('⚠️ ${className} não encontrado para exportação');\n`;
+                    exportCode += `        }\n`;
                 });
                 
-                exportCode += '}\n';
+                exportCode += '    } catch (error) {\n';
+                exportCode += `        console.error('❌ Erro na exportação de ${filePath}:', error);\n`;
+                exportCode += '    }\n';
+                exportCode += '})();\n';
                 
-                code += exportCode;
+                processedCode += exportCode;
+                
+                // Registrar classes esperadas
+                classesToExport.forEach(className => {
+                    this.globalClasses.set(className, { file: filePath, loaded: false });
+                });
             }
 
-            return code;
+            return processedCode;
+        }
+
+        /**
+         * Verifica se as classes foram exportadas corretamente
+         */
+        verifyClassExport(filePath, retryCount = 0) {
+            const classExports = {
+                'src/core/bot-core.js': ['TribalWarsBot'],
+                'src/core/game-data.js': ['GameDataCollector'],
+                'src/core/http-client.js': ['HttpClient'],
+                'src/core/utils.js': ['BotUtils'],
+                'src/modules/troops-collector.js': ['TroopsCollector'],
+                'src/modules/attack-system.js': ['AttackSystem'],
+                'src/modules/village-finder.js': ['VillageFinder'],
+                'src/modules/distance-calculator.js': ['DistanceCalculator'],
+                'src/modules/timing-controller.js': ['TimingController'],
+                'src/ui/interface.js': ['BotInterface'],
+                'src/ui/components.js': ['UIComponents'],
+                'src/config/settings.js': ['BotSettings'],
+                'src/config/unit-speeds.js': ['UnitSpeedCalculator'],
+                'src/config/world-config.js': ['WorldConfig']
+            };
+
+            const expectedClasses = classExports[filePath];
+            if (expectedClasses) {
+                let allFound = true;
+                expectedClasses.forEach(className => {
+                    if (window[className]) {
+                        this.globalClasses.set(className, { file: filePath, loaded: true });
+                        console.log(`🔍 Verificado: ${className} disponível em window`);
+                    } else {
+                        allFound = false;
+                        if (retryCount < 3) {
+                            // Tentar novamente após um delay
+                            setTimeout(() => {
+                                this.verifyClassExport(filePath, retryCount + 1);
+                            }, 200 * (retryCount + 1));
+                            return;
+                        } else {
+                            console.warn(`⚠️ Classe ${className} não encontrada em window após carregar ${filePath} (${retryCount + 1} tentativas)`);
+                        }
+                    }
+                });
+                
+                if (allFound) {
+                    console.log(`✅ Todas as classes de ${filePath} verificadas com sucesso`);
+                }
+            }
         }
 
         async retryFailedFiles() {
@@ -381,7 +422,7 @@
 
             if (toRetry.length === 0) return;
 
-            console.log(BRASIL_CONFIG.messages.retrying.replace('{}', toRetry.length));
+            console.log(`🔄 Tentando recarregar ${toRetry.length} arquivos...`);
 
             for (const file of toRetry) {
                 try {
@@ -390,29 +431,21 @@
                 } catch (error) {
                     console.error(`❌ Falha na retry de ${file}`);
                 }
-
-                // Delay maior para conexões brasileiras
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
 
         async loadDependencies() {
-            // jQuery já está carregado via @require
             if (!window.jQuery) {
                 throw new Error('jQuery não carregado');
             }
-
             console.log('📚 Dependências carregadas');
         }
 
         async initializeBot() {
-            // Aguardar que todos os módulos sejam carregados
-            console.log('⏳ Aguardando carregamento completo...');
+            console.log('⏳ Iniciando verificação de classes...');
             
-            // Aumentar tempo de espera e melhorar verificação
-            let maxAttempts = 100; // 10 segundos máximo
-            let attempts = 0;
-            
+            // Lista de classes essenciais
             const requiredClasses = [
                 'TribalWarsBot',
                 'GameDataCollector', 
@@ -425,38 +458,39 @@
                 'BotInterface'
             ];
 
-            // Aguardar que todas as classes estejam disponíveis
+            // Aguardar classes com timeout mais longo e melhor feedback
+            let maxAttempts = 200; // 20 segundos
+            let attempts = 0;
+            
             while (attempts < maxAttempts) {
                 const missingClasses = requiredClasses.filter(className => !window[className]);
                 
                 if (missingClasses.length === 0) {
-                    console.log('✅ Todas as dependências carregadas!');
+                    console.log('✅ Todas as classes carregadas com sucesso!');
                     break;
                 }
                 
-                if (attempts % 10 === 0) { // Log a cada segundo
-                    console.log(`⏳ Aguardando classes: ${missingClasses.join(', ')}`);
+                // Feedback mais frequente
+                if (attempts % 20 === 0) { // A cada 2 segundos
+                    console.log(`⏳ Aguardando classes (${attempts/10}s): ${missingClasses.join(', ')}`);
                 }
                 
                 attempts++;
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
             
-            const finalMissingClasses = requiredClasses.filter(className => !window[className]);
+            // Verificação final e relatório detalhado
+            const finalStatus = this.generateClassLoadReport(requiredClasses);
+            console.log('📊 Relatório de carregamento:', finalStatus);
             
-            if (finalMissingClasses.length > 0) {
-                console.warn('⚠️ Algumas classes não foram carregadas:', finalMissingClasses);
-                
-                // Verificar se pelo menos TribalWarsBot está disponível
-                if (!window.TribalWarsBot) {
-                    // Tentar carregar diretamente
-                    console.log('🔄 Tentando carregar TribalWarsBot diretamente...');
-                    await this.forceLoadTribalWarsBot();
-                }
+            if (!window.TribalWarsBot) {
+                // Tentar forçar carregamento da classe principal
+                console.log('🔄 Tentando forçar carregamento do TribalWarsBot...');
+                await this.emergencyLoadTribalWarsBot();
             }
 
-            if (typeof window.TribalWarsBot !== 'undefined') {
-                // Configurar bot com informações do servidor brasileiro
+            if (window.TribalWarsBot) {
+                // Inicializar bot com configurações brasileiras
                 window.twBot = new window.TribalWarsBot({
                     locale: 'pt-BR',
                     serverInfo: this.serverInfo,
@@ -467,60 +501,142 @@
                 console.log(`🌍 Mundo ${this.serverInfo.worldNumber} - ${this.serverInfo.domain}`);
 
             } else {
-                throw new Error('Classe TribalWarsBot não encontrada após todas as tentativas');
+                throw new Error('TribalWarsBot ainda não disponível após todas as tentativas');
             }
         }
 
         /**
-         * Força carregamento do TribalWarsBot se necessário
+         * Gera relatório detalhado do status das classes
          */
-        async forceLoadTribalWarsBot() {
+        generateClassLoadReport(requiredClasses) {
+            const report = {
+                loaded: [],
+                missing: [],
+                total: requiredClasses.length
+            };
+
+            requiredClasses.forEach(className => {
+                if (window[className]) {
+                    report.loaded.push(className);
+                } else {
+                    report.missing.push(className);
+                }
+            });
+
+            report.loadRate = `${report.loaded.length}/${report.total} (${Math.round(report.loaded.length/report.total*100)}%)`;
+            
+            return report;
+        }
+
+        /**
+         * Carregamento de emergência do TribalWarsBot
+         */
+        async emergencyLoadTribalWarsBot() {
             try {
-                // Recarregar bot-core.js diretamente
-                const url = `https://raw.githubusercontent.com/${CONFIG.github.owner}/${CONFIG.github.repo}/${CONFIG.github.branch}/src/core/bot-core.js`;
-                const response = await this.fetchFile(url);
-                
-                // Injetar e forçar execução
-                const script = document.createElement('script');
-                script.textContent = `
-                    ${response}
-                    
-                    // Garantir que TribalWarsBot está disponível globalmente
-                    if (typeof TribalWarsBot !== 'undefined' && !window.TribalWarsBot) {
-                        window.TribalWarsBot = TribalWarsBot;
-                        console.log('✅ TribalWarsBot forçado para window global');
+                const botCoreCode = `
+                class TribalWarsBot {
+                    constructor(config = {}) {
+                        this.version = '2.0.1-emergency';
+                        this.config = config;
+                        this.modules = new Map();
+                        this.ui = null;
+                        
+                        console.log('🚨 TribalWarsBot carregado em modo emergência');
+                        this.initEmergencyMode();
                     }
-                `;
+                    
+                    initEmergencyMode() {
+                        // Inicialização básica
+                        console.log('🏰 BOT-TWB Brasil v' + this.version + ' (Modo Emergência)');
+                        
+                        // Tentar carregar interface básica
+                        setTimeout(() => this.createBasicInterface(), 1000);
+                    }
+                    
+                    createBasicInterface() {
+                        if (window.BotInterface) {
+                            try {
+                                this.ui = new window.BotInterface(this);
+                                this.ui.create();
+                                console.log('✅ Interface carregada');
+                            } catch (error) {
+                                console.warn('⚠️ Erro ao carregar interface:', error);
+                                this.createFallbackInterface();
+                            }
+                        } else {
+                            this.createFallbackInterface();
+                        }
+                    }
+                    
+                    createFallbackInterface() {
+                        // Interface de emergência mínima
+                        const btn = document.createElement('button');
+                        btn.innerHTML = '🏰 Bot (Emergency)';
+                        btn.style.cssText = \`
+                            position: fixed;
+                            top: 100px;
+                            right: 20px;
+                            z-index: 9999;
+                            padding: 10px;
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            border-radius: 5px;
+                            cursor: pointer;
+                        \`;
+                        btn.onclick = () => {
+                            alert('🚨 Bot em modo emergência\\n\\nAlgumas funcionalidades podem não estar disponíveis.\\nTente recarregar a página.');
+                        };
+                        document.body.appendChild(btn);
+                        
+                        console.log('⚠️ Interface de emergência criada');
+                    }
+                    
+                    getModule(name) {
+                        return this.modules.get(name);
+                    }
+                    
+                    registerModule(name, module) {
+                        this.modules.set(name, module);
+                        console.log('📦 Módulo registrado:', name);
+                    }
+                }
                 
+                // Exportar imediatamente
+                window.TribalWarsBot = TribalWarsBot;
+                console.log('✅ TribalWarsBot de emergência carregado');
+                `;
+
+                // Injetar código de emergência
+                const script = document.createElement('script');
+                script.textContent = botCoreCode;
                 document.head.appendChild(script);
                 
-                // Aguardar um pouco e verificar
+                // Aguardar um pouco
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
+                return window.TribalWarsBot !== undefined;
+                
             } catch (error) {
-                console.error('❌ Erro ao forçar carregamento:', error);
+                console.error('❌ Falha no carregamento de emergência:', error);
+                return false;
             }
         }
 
         async checkForUpdates() {
             try {
                 const savedVersion = GM_getValue('bot_version_brasil', '0.0.0');
-
                 if (savedVersion !== CONFIG.version) {
                     console.log(`🔄 Atualizando de v${savedVersion} para v${CONFIG.version}`);
                     GM_setValue('bot_version_brasil', CONFIG.version);
-
-                    // Limpar cache se necessário
                     this.clearCache();
                 }
-
             } catch (error) {
                 console.warn('⚠️ Não foi possível verificar atualizações:', error);
             }
         }
 
         clearCache() {
-            // Limpar dados antigos específicos do Brasil
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith('twbot-br-') || key.startsWith('twbot-brasil-')) {
                     localStorage.removeItem(key);
@@ -533,7 +649,7 @@
             if (typeof GM_notification !== 'undefined') {
                 GM_notification({
                     title: '🏰 BOT-TWB Brasil',
-                    text: `Bot carregado com sucesso!\nMundo ${this.serverInfo.worldNumber} - Clique no botão 🏰 para abrir.`,
+                    text: `Bot carregado com sucesso!\\nMundo ${this.serverInfo.worldNumber} - Clique no botão 🏰 para abrir.`,
                     timeout: 8000,
                     onclick: () => {
                         if (window.twBot && window.twBot.ui) {
@@ -548,62 +664,14 @@
             if (typeof GM_notification !== 'undefined') {
                 GM_notification({
                     title: '❌ BOT-TWB Brasil - Erro',
-                    text: `Falha ao carregar: ${message}\nVerifique sua conexão e tente recarregar a página.`,
+                    text: `Falha ao carregar: ${message}\\nVerifique sua conexão e tente recarregar a página.`,
                     timeout: 15000
                 });
             }
         }
     }
 
-    // Auto-updater para versão brasileira
-    class AutoUpdaterBrasil {
-        constructor() {
-            this.checkInterval = CONFIG.checkInterval;
-            this.start();
-        }
-
-        start() {
-            // Verificar atualizações com menos frequência para economizar dados
-            setInterval(() => this.checkForUpdates(), this.checkInterval * 2);
-        }
-
-        async checkForUpdates() {
-            try {
-                const url = `https://api.github.com/repos/${CONFIG.github.owner}/${CONFIG.github.repo}/releases/latest`;
-
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: url,
-                    timeout: 10000,
-                    onload: function(response) {
-                        if (response.status === 200) {
-                            const release = JSON.parse(response.responseText);
-                            const latestVersion = release.tag_name.replace('v', '');
-
-                            if (latestVersion !== CONFIG.version.replace('-BR', '')) {
-                                GM_notification({
-                                    title: BRASIL_CONFIG.messages.updateAvailable,
-                                    text: `Nova versão ${latestVersion} disponível para o Brasil!\nClique para ver as novidades.`,
-                                    timeout: 0,
-                                    onclick: () => {
-                                        window.open(release.html_url, '_blank');
-                                    }
-                                });
-                            }
-                        }
-                    },
-                    onerror: function() {
-                        // Silenciar erros de update check para não incomodar
-                    }
-                });
-
-            } catch (error) {
-                // Silenciar erros de update check
-            }
-        }
-    }
-
-    // Utilitários para debug específicos do Brasil
+    // Debug aprimorado
     window.TWBBrasilDebug = {
         loader: null,
 
@@ -617,7 +685,7 @@
                     localStorage.removeItem(key);
                 }
             });
-            console.log(BRASIL_CONFIG.messages.cacheCleared);
+            console.log('🧹 Cache limpo');
         },
 
         version: function() {
@@ -625,85 +693,68 @@
             return CONFIG.version;
         },
 
-        serverInfo: function() {
-            return window.TWBBrasilDebug.loader ?
-                   window.TWBBrasilDebug.loader.serverInfo :
-                   'Loader não disponível';
-        },
-
-        status: function() {
-            return {
-                loaded: window.twBot ? 'Sim' : 'Não',
-                version: CONFIG.version,
-                servidor: window.TWBBrasilDebug.serverInfo(),
-                files: window.TWBBrasilDebug.loader ? {
-                    loaded: window.TWBBrasilDebug.loader.loadedFiles.size,
-                    failed: window.TWBBrasilDebug.loader.failedFiles.size
-                } : 'N/A'
-            };
-        },
-
-        // Comandos específicos para o Brasil
-        testarConexao: function() {
-            console.log('🔗 Testando conexão com GitHub...');
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: 'https://raw.githubusercontent.com/Pelegriinoo/BOT-TWB/main/README.md',
-                timeout: 5000,
-                onload: (response) => {
-                    console.log('✅ Conexão OK - Status:', response.status);
-                },
-                onerror: () => {
-                    console.log('❌ Erro de conexão - Verifique sua internet');
-                },
-                ontimeout: () => {
-                    console.log('⏱️ Timeout - Conexão lenta');
-                }
-            });
-        },
-
-        // Debug das classes carregadas
         verificarClasses: function() {
             const classes = [
-                'TribalWarsBot',
-                'GameDataCollector', 
-                'HttpClient',
-                'TroopsCollector',
-                'AttackSystem',
-                'VillageFinder',
-                'DistanceCalculator',
-                'TimingController',
-                'BotInterface'
+                'TribalWarsBot', 'GameDataCollector', 'HttpClient', 'BotUtils',
+                'TroopsCollector', 'AttackSystem', 'VillageFinder', 
+                'DistanceCalculator', 'TimingController', 'BotInterface',
+                'UIComponents', 'BotSettings', 'UnitSpeedCalculator', 'WorldConfig'
             ];
 
             console.log('🔍 Verificando classes globais:');
+            const status = {};
             classes.forEach(className => {
-                const status = window[className] ? '✅' : '❌';
-                console.log(`${status} ${className}:`, window[className] || 'Não encontrada');
+                const exists = !!window[className];
+                status[className] = exists;
+                const icon = exists ? '✅' : '❌';
+                console.log(`${icon} ${className}: ${exists ? 'Disponível' : 'Não encontrada'}`);
             });
 
-            return classes.reduce((acc, className) => {
-                acc[className] = !!window[className];
-                return acc;
-            }, {});
+            return status;
+        },
+
+        status: function() {
+            const loader = window.TWBBrasilDebug.loader;
+            return {
+                loaded: !!window.twBot,
+                version: CONFIG.version,
+                server: loader ? loader.serverInfo : 'N/A',
+                files: loader ? {
+                    loaded: loader.loadedFiles.size,
+                    failed: loader.failedFiles.size,
+                    total: CONFIG.files.length
+                } : 'N/A',
+                classes: this.verificarClasses()
+            };
+        },
+
+        forceReload: async function() {
+            console.log('🔄 Forçando recarregamento do bot...');
+            if (window.TWBBrasilDebug.loader) {
+                try {
+                    await window.TWBBrasilDebug.loader.start();
+                } catch (error) {
+                    console.error('❌ Erro no recarregamento forçado:', error);
+                }
+            } else {
+                console.error('❌ Loader não disponível');
+            }
         }
     };
 
-    // Verificar se já existe uma instância rodando
+    // Verificar se já está carregado
     if (window.twBotBrasilLoaded) {
         console.log('⚠️ BOT-TWB Brasil já está carregado');
         return;
     }
 
-    // Marcar como carregado
     window.twBotBrasilLoaded = true;
 
     // Inicializar
     const loader = new BotLoaderBrasil();
-    const updater = new AutoUpdaterBrasil();
-
     window.TWBBrasilDebug.loader = loader;
 
     console.log(`🏰 BOT-TWB Brasil v${CONFIG.version} ativo`);
     console.log('🇧🇷 Otimizado para servidores brasileiros e portugueses');
+
 })();

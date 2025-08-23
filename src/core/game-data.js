@@ -274,4 +274,5 @@ class GameDataCollector {
 // Registrar globalmente
 if (typeof window !== 'undefined') {
     window.GameDataCollector = GameDataCollector;
+    console.log('✅ GameDataCollector exportado para window');
 }

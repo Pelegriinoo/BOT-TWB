@@ -138,4 +138,5 @@ class TribalWarsBot {
 // Exportar para uso global
 if (typeof window !== 'undefined') {
     window.TribalWarsBot = TribalWarsBot;
+    console.log('✅ TribalWarsBot exportado para window');
 }

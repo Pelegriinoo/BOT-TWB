@@ -758,6 +758,7 @@ class BotUtils {
 // Registrar globalmente
 if (typeof window !== 'undefined') {
     window.BotUtils = BotUtils;
+    console.log('✅ BotUtils exportado para window');
     
     // Aliases para conveniência
     window.formatNumber = BotUtils.formatNumber;
