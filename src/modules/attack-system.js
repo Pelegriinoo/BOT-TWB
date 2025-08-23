@@ -348,8 +348,12 @@ class AttackSystem {
 // Registrar módulo globalmente
 if (typeof window !== 'undefined') {
     window.AttackSystem = AttackSystem;
+    console.log('✅ AttackSystem exportado para window');
     
     if (window.twBot) {
         window.twBot.registerModule('attackSystem', new AttackSystem());
     }
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/modules/attack-system.js executado com sucesso');

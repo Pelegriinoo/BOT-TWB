@@ -171,5 +171,9 @@ class DistanceCalculator {
 // Criar instância global
 if (typeof window !== 'undefined') {
     window.DistanceCalculator = DistanceCalculator;
+    console.log('✅ DistanceCalculator exportado para window');
     window.distanceCalculator = new DistanceCalculator();
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/modules/distance-calculator.js executado com sucesso');

@@ -140,3 +140,6 @@ if (typeof window !== 'undefined') {
     window.TribalWarsBot = TribalWarsBot;
     console.log('✅ TribalWarsBot exportado para window');
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/core/bot-core.js executado com sucesso');

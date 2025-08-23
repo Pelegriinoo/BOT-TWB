@@ -558,4 +558,8 @@ if (typeof document !== 'undefined') {
 // Registrar globalmente
 if (typeof window !== 'undefined') {
     window.UIComponents = UIComponents;
+    console.log('✅ UIComponents exportado para window');
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/ui/components.js executado com sucesso');

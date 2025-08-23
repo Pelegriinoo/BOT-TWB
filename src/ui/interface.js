@@ -916,4 +916,8 @@ class BotInterface {
 // Exportar para uso global
 if (typeof window !== 'undefined') {
     window.BotInterface = BotInterface;
+    console.log('✅ BotInterface exportado para window');
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/ui/interface.js executado com sucesso');

@@ -349,4 +349,8 @@ class BotSettings {
 // Registrar globalmente
 if (typeof window !== 'undefined') {
     window.BotSettings = BotSettings;
+    console.log('✅ BotSettings exportado para window');
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/config/settings.js executado com sucesso');

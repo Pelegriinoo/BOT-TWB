@@ -594,6 +594,7 @@ class UnitSpeedCalculator {
 if (typeof window !== 'undefined') {
     window.UNIT_SPEEDS = UNIT_SPEEDS;
     window.UnitSpeedCalculator = UnitSpeedCalculator;
+    console.log('✅ UnitSpeedCalculator exportado para window');
     
     // Disponibilizar instância global com configuração padrão
     window.unitSpeedCalc = new UnitSpeedCalculator();
@@ -614,3 +615,6 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { UNIT_SPEEDS, UnitSpeedCalculator };
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/config/unit-speeds.js executado com sucesso');

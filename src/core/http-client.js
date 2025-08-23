@@ -15,7 +15,29 @@ class HttpClient {
         this.cacheTimeout = options.cacheTimeout || 300000; // 5 minutos
         
         // Rate limiting
-        this.requestQueue = [];
+        this// Registrar globalmente
+if (typeof window !== 'undefined') {
+    window.HttpClient = HttpClient;
+    console.log('✅ HttpClient exportado para window');
+    window.createHttpClient = createHttpClient;
+    window.getHttpClient = getHttpClient;
+    
+    // Instância global para conveniência
+    window.httpClient = getHttpClient();
+    
+    // Registrar no sistema do bot se existir
+    if (window.twBot) {
+        window.twBot.registerModule('httpClient', window.httpClient);
+    }
+}
+
+// Para Node.js/CommonJS (se necessário)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = HttpClient;
+}
+
+// Confirmar execução
+console.log('📦 Arquivo src/core/http-client.js executado com sucesso');
         this.isProcessingQueue = false;
         this.minRequestInterval = options.minRequestInterval || 500; // 500ms entre requests
         this.lastRequestTime = 0;

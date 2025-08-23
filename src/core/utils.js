@@ -767,3 +767,6 @@ if (typeof window !== 'undefined') {
     window.formatCoords = BotUtils.formatCoords;
     window.sleep = BotUtils.sleep;
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/core/utils.js executado com sucesso');

@@ -178,9 +178,13 @@ class TroopsCollector {
 // Registrar módulo globalmente
 if (typeof window !== 'undefined') {
     window.TroopsCollector = TroopsCollector;
+    console.log('✅ TroopsCollector exportado para window');
     
     // Registrar no sistema principal se existir
     if (window.twBot) {
         window.twBot.registerModule('troopsCollector', new TroopsCollector());
     }
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/modules/troops-collector.js executado com sucesso');

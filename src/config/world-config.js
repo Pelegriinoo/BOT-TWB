@@ -624,6 +624,7 @@ class WorldConfig {
 // Registrar globalmente
 if (typeof window !== 'undefined') {
     window.WorldConfig = WorldConfig;
+    console.log('✅ WorldConfig exportado para window');
     
     // Criar instância global
     window.worldConfig = new WorldConfig();
@@ -642,3 +643,6 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = WorldConfig;
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/config/world-config.js executado com sucesso');

@@ -158,5 +158,9 @@ class VillageFinder {
 // Criar instância global
 if (typeof window !== 'undefined') {
     window.VillageFinder = VillageFinder;
+    console.log('✅ VillageFinder exportado para window');
     window.villageFinder = new VillageFinder();
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/modules/village-finder.js executado com sucesso');

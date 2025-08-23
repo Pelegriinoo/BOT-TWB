@@ -83,5 +83,9 @@ class TimingController {
 // Criar instância global
 if (typeof window !== 'undefined') {
     window.TimingController = TimingController;
+    console.log('✅ TimingController exportado para window');
     window.timingController = new TimingController();
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/modules/timing-controller.js executado com sucesso');

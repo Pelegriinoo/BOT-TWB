@@ -276,3 +276,6 @@ if (typeof window !== 'undefined') {
     window.GameDataCollector = GameDataCollector;
     console.log('✅ GameDataCollector exportado para window');
 }
+
+// Confirmar execução
+console.log('📦 Arquivo src/core/game-data.js executado com sucesso');
