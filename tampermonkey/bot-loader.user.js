@@ -260,30 +260,50 @@
                     
                     const script = document.createElement('script');
                     script.type = 'text/javascript';
+                    script.setAttribute('data-file', filePath);
+                    
                     script.textContent = `
                         // Arquivo: ${filePath}
                         // Carregado em: ${new Date().toLocaleString('pt-BR')}
                         // Servidor: ${this.serverInfo.domain} (Mundo ${this.serverInfo.worldNumber})
                         
-                        try {
-                            ${processedCode}
-                        } catch (error) {
-                            console.error('❌ Erro ao executar ${filePath}:', error);
-                            throw error;
-                        }
+                        (function() {
+                            'use strict';
+                            try {
+                                ${processedCode}
+                            } catch (error) {
+                                console.error('❌ Erro ao executar ${filePath}:', error);
+                                throw error;
+                            }
+                        })();
                     `;
 
+                    let executed = false;
+                    
                     script.onerror = (error) => {
-                        console.error(`❌ Erro ao carregar script ${filePath}:`, error);
-                        reject(error);
+                        if (!executed) {
+                            executed = true;
+                            console.error(`❌ Erro ao carregar script ${filePath}:`, error);
+                            reject(error);
+                        }
                     };
                     
-                    script.onload = () => resolve();
+                    script.onload = () => {
+                        if (!executed) {
+                            executed = true;
+                            resolve();
+                        }
+                    };
 
                     document.head.appendChild(script);
 
-                    // Resolve imediatamente para scripts inline
-                    setTimeout(resolve, 100);
+                    // Resolve após um tempo para scripts inline
+                    setTimeout(() => {
+                        if (!executed) {
+                            executed = true;
+                            resolve();
+                        }
+                    }, 200);
 
                 } catch (error) {
                     console.error(`❌ Erro ao processar ${filePath}:`, error);
@@ -306,7 +326,51 @@
             processedCode = processedCode.replace(/^\s*export\s+\{[^}]*\}\s*;?\s*$/gm, '');
             processedCode = processedCode.replace(/^\s*export\s+default\s+/gm, '');
             
+            // Garantir que classes sejam exportadas para window
+            processedCode = this.ensureGlobalExports(processedCode, filePath);
+            
             return processedCode;
+        }
+
+        /**
+         * Garante que classes importantes sejam exportadas para window
+         */
+        ensureGlobalExports(code, filePath) {
+            const classExports = {
+                'src/core/bot-core.js': ['TribalWarsBot'],
+                'src/core/game-data.js': ['GameDataCollector'],
+                'src/core/http-client.js': ['HttpClient'],
+                'src/modules/troops-collector.js': ['TroopsCollector'],
+                'src/modules/attack-system.js': ['AttackSystem'],
+                'src/modules/village-finder.js': ['VillageFinder'],
+                'src/modules/distance-calculator.js': ['DistanceCalculator'],
+                'src/modules/timing-controller.js': ['TimingController'],
+                'src/ui/interface.js': ['BotInterface'],
+                'src/ui/components.js': ['BotComponents'],
+                'src/config/settings.js': ['Settings'],
+                'src/config/unit-speeds.js': ['UnitSpeedCalculator'],
+                'src/config/world-config.js': ['WorldConfig']
+            };
+
+            const classesToExport = classExports[filePath];
+            
+            if (classesToExport && classesToExport.length > 0) {
+                let exportCode = '\n\n// Exportações globais automáticas\n';
+                exportCode += 'if (typeof window !== \'undefined\') {\n';
+                
+                classesToExport.forEach(className => {
+                    exportCode += `    if (typeof ${className} !== 'undefined' && !window.${className}) {\n`;
+                    exportCode += `        window.${className} = ${className};\n`;
+                    exportCode += `        console.log('✅ ${className} exportado para window global');\n`;
+                    exportCode += `    }\n`;
+                });
+                
+                exportCode += '}\n';
+                
+                code += exportCode;
+            }
+
+            return code;
         }
 
         async retryFailedFiles() {
@@ -343,9 +407,12 @@
 
         async initializeBot() {
             // Aguardar que todos os módulos sejam carregados
-            await new Promise(resolve => setTimeout(resolve, 3000));
-
-            // Verificar se todas as dependências estão disponíveis
+            console.log('⏳ Aguardando carregamento completo...');
+            
+            // Aumentar tempo de espera e melhorar verificação
+            let maxAttempts = 100; // 10 segundos máximo
+            let attempts = 0;
+            
             const requiredClasses = [
                 'TribalWarsBot',
                 'GameDataCollector', 
@@ -358,11 +425,34 @@
                 'BotInterface'
             ];
 
-            const missingClasses = requiredClasses.filter(className => !window[className]);
+            // Aguardar que todas as classes estejam disponíveis
+            while (attempts < maxAttempts) {
+                const missingClasses = requiredClasses.filter(className => !window[className]);
+                
+                if (missingClasses.length === 0) {
+                    console.log('✅ Todas as dependências carregadas!');
+                    break;
+                }
+                
+                if (attempts % 10 === 0) { // Log a cada segundo
+                    console.log(`⏳ Aguardando classes: ${missingClasses.join(', ')}`);
+                }
+                
+                attempts++;
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
             
-            if (missingClasses.length > 0) {
-                console.warn('⚠️ Algumas classes não foram carregadas:', missingClasses);
-                // Tentar mesmo assim
+            const finalMissingClasses = requiredClasses.filter(className => !window[className]);
+            
+            if (finalMissingClasses.length > 0) {
+                console.warn('⚠️ Algumas classes não foram carregadas:', finalMissingClasses);
+                
+                // Verificar se pelo menos TribalWarsBot está disponível
+                if (!window.TribalWarsBot) {
+                    // Tentar carregar diretamente
+                    console.log('🔄 Tentando carregar TribalWarsBot diretamente...');
+                    await this.forceLoadTribalWarsBot();
+                }
             }
 
             if (typeof window.TribalWarsBot !== 'undefined') {
@@ -377,7 +467,38 @@
                 console.log(`🌍 Mundo ${this.serverInfo.worldNumber} - ${this.serverInfo.domain}`);
 
             } else {
-                throw new Error('Classe TribalWarsBot não encontrada');
+                throw new Error('Classe TribalWarsBot não encontrada após todas as tentativas');
+            }
+        }
+
+        /**
+         * Força carregamento do TribalWarsBot se necessário
+         */
+        async forceLoadTribalWarsBot() {
+            try {
+                // Recarregar bot-core.js diretamente
+                const url = `https://raw.githubusercontent.com/${CONFIG.github.owner}/${CONFIG.github.repo}/${CONFIG.github.branch}/src/core/bot-core.js`;
+                const response = await this.fetchFile(url);
+                
+                // Injetar e forçar execução
+                const script = document.createElement('script');
+                script.textContent = `
+                    ${response}
+                    
+                    // Garantir que TribalWarsBot está disponível globalmente
+                    if (typeof TribalWarsBot !== 'undefined' && !window.TribalWarsBot) {
+                        window.TribalWarsBot = TribalWarsBot;
+                        console.log('✅ TribalWarsBot forçado para window global');
+                    }
+                `;
+                
+                document.head.appendChild(script);
+                
+                // Aguardar um pouco e verificar
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+            } catch (error) {
+                console.error('❌ Erro ao forçar carregamento:', error);
             }
         }
 
@@ -539,6 +660,32 @@
                     console.log('⏱️ Timeout - Conexão lenta');
                 }
             });
+        },
+
+        // Debug das classes carregadas
+        verificarClasses: function() {
+            const classes = [
+                'TribalWarsBot',
+                'GameDataCollector', 
+                'HttpClient',
+                'TroopsCollector',
+                'AttackSystem',
+                'VillageFinder',
+                'DistanceCalculator',
+                'TimingController',
+                'BotInterface'
+            ];
+
+            console.log('🔍 Verificando classes globais:');
+            classes.forEach(className => {
+                const status = window[className] ? '✅' : '❌';
+                console.log(`${status} ${className}:`, window[className] || 'Não encontrada');
+            });
+
+            return classes.reduce((acc, className) => {
+                acc[className] = !!window[className];
+                return acc;
+            }, {});
         }
     };
 
